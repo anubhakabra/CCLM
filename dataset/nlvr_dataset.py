@@ -3,12 +3,13 @@ import os
 from torch.utils.data import Dataset
 from PIL import Image
 from dataset.utils import pre_caption
+import random
 
 
 class nlvr_dataset(Dataset):
     def __init__(self, ann_file, transform, image_root=None):
         self.ann = []
-
+        
         if isinstance(ann_file, list):
             for f in ann_file:
                 self.ann += json.load(open(f, 'r'))
@@ -18,10 +19,13 @@ class nlvr_dataset(Dataset):
 
         else:
             raise ValueError(f"ann_file == {ann_file}")
-
         self.transform = transform
         self.image_root = image_root
         self.max_words = 30
+        if len(self.ann) > 10000:
+            self.subsample_n = 500
+            self.ann = random.sample(self.ann, self.subsample_n)
+            print("Size after sampling : ", len(self.ann))
         
     def __len__(self):
         return len(self.ann)
@@ -58,3 +62,4 @@ class nlvr_dataset(Dataset):
             raise ValueError(f"unsupported label: {ann['label']}")
 
         return image0, image1, sentence, label
+

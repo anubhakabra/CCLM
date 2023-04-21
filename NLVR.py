@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 import math
+import pandas as pd
 
 import ruamel.yaml as yaml
 import numpy as np
@@ -66,7 +67,10 @@ def evaluate(model, data_loader, tokenizer, device):
 
     header = 'Evaluation:'
     print_freq = 50
-
+    predictions = []
+    input_texts = []
+    all_targets = []
+    matches = []
     for image0, image1, text, targets in metric_logger.log_every(data_loader, print_freq, header):
         images = torch.cat([image0, image1], dim=0)
         images, targets = images.to(device), targets.to(device)   
@@ -76,13 +80,24 @@ def evaluate(model, data_loader, tokenizer, device):
  
         _, pred_class = prediction.max(1)
         accuracy = (targets == pred_class).sum() / targets.size(0)
+        input_texts.extend(text)
+        predictions.extend(pred_class.tolist())
+        all_targets.extend(targets.tolist())
+        matches.extend((targets == pred_class).tolist())
         
         metric_logger.meters['acc'].update(accuracy.item(), n=image0.size(0))
                 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger.global_avg())   
-    return {k: "{:.4f}".format(meter.global_avg) for k, meter in metric_logger.meters.items()}
+    print("Averaged stats:", metric_logger.global_avg())
+
+    df =pd.DataFrame()
+    df["text"]   = input_texts
+    df["predictions"] = predictions
+    df["label"] = all_targets
+    df["matches"] = matches
+
+    return ({k: "{:.4f}".format(meter.global_avg) for k, meter in metric_logger.meters.items()}, df)
     
     
 def main(args, config):
@@ -147,21 +162,30 @@ def main(args, config):
 
     print("### output_dir, ", args.output_dir, flush=True)
     start_time = time.time()
+    
 
     if args.evaluate:
+        path_val = "output/eval/eval.csv"
+        path_test="output/eval/test/"
+
         print("Start evaluating")
-        val_stats = evaluate(model, val_loader, tokenizer, device)
+        val_stats, df_val = evaluate(model, val_loader, tokenizer, device)
         if utils.is_main_process():
             print({f'val_{k}': v for k, v in val_stats.items()}, flush=True)
-        dist.barrier()
-
+            df_val.to_csv(path_val, index =False)
+        #dist.barrier()
+       
         for language, test_loader in test_loader_dict.items():
-            test_stats = evaluate(model, test_loader, tokenizer, device)
+            test_stats, df_test = evaluate(model, test_loader, tokenizer, device)
+            df_test.to_csv(path_test + str(language) +".csv", index =False)
             if utils.is_main_process():
                 print({f'test_{language}_{k}': v for k, v in test_stats.items()}, flush=True)
-            dist.barrier()
+            #dist.barrier()
+        
 
     else:
+        path_val = "output/train/eval.csv"
+        path_test="output/train/test/"
         print("Start training")
         arg_opt = utils.AttrDict(config['optimizer'])
         optimizer = create_optimizer(arg_opt, model)
@@ -181,7 +205,7 @@ def main(args, config):
                 train_loader.sampler.set_epoch(epoch)
             train_stats = train(model, train_loader, optimizer, tokenizer, epoch, device, lr_scheduler)
             if epoch >= config['start_eval'] and (epoch+1) % config['eval_interval'] == 0:
-                val_stats = evaluate(model, val_loader, tokenizer, device)
+                val_stats, df_val= evaluate(model, val_loader, tokenizer, device)
 
                 if utils.is_main_process():
                     log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
@@ -203,14 +227,16 @@ def main(args, config):
                     with open(os.path.join(args.output_dir, "log.txt"), "a") as f:
                         f.write(json.dumps(log_stats) + "\n")
 
-            dist.barrier()
+            #dist.barrier()
 
             if epoch >= config['start_eval']:
+                path_test = 'output/test/{lang}-eval.csv'
                 for language, test_loader in test_loader_dict.items():
-                    test_stats = evaluate(model, test_loader, tokenizer, device)
+                    test_stats, df_test = evaluate(model, test_loader, tokenizer, device)
                     if utils.is_main_process():
                         print({f'test_{language}_{k}': v for k, v in test_stats.items()}, flush=True)
-                    dist.barrier()
+                    #dist.barrier()
+                    df_test.to_csv(path_test.format(lang=language), index=False)
 
         if utils.is_main_process():
             with open(os.path.join(args.output_dir, "log.txt"), "a") as f:

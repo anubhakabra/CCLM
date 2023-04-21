@@ -2,16 +2,16 @@
 
 # multilingual x multimodal
 train_file: [
-"hdfs://path/to/cc-3m-uc2"  # # a directory, which contains for example 64 files. Each file contains multiple lines, and each line is a json object(dict).
+"/projects/tir4/users/anubhak/CCLM/data/wit/json"  # # a directory, which contains for example 64 files. Each file contains multiple lines, and each line is a json object(dict).
                ]  # local files are also ok
 
 train_dataset_size: 2838361 # for IterableDataset
-images: {image_key: "binary",
-         is_image_rpath: False, # read path or base64 encoding
-         caption_key: "caption",
+images: {image_key: "image_path",
+         is_image_rpath: True, # read path or base64 encoding
+         caption_key: "caption_reference_description",
          tokenized: False,  # whether texts have been tokenized
-         batch_size: 128,  # 128 x 8 = 1024
-         num_workers: 4,  # better -> the total number of training files % (world_size * num_workers) == 0
+         batch_size: 16,  # 128 x 8 = 1024
+         num_workers: 1,  # better -> the total number of training files % (world_size * num_workers) == 0
          # language_chosen: ['en'],
          iter_perc: 1.0,
 }
@@ -29,15 +29,15 @@ images_mono: {image_key: "binary",
          is_image_rpath: False, # read path or base64 encoding
          caption_key: "desc",
          tokenized: False,  # whether texts have been tokenized
-         batch_size: 128,  # 128 x 8 = 1024
+         batch_size: 16,  # 128 x 8 = 1024
          num_workers: 4,  # better -> the total number of training files % (world_size * num_workers) == 0
          iter_perc: 1.0,
 }
 
-
-train_file_text: [
-    "hdfs://path/to/wikimatrix",
-]  # multilingual parallel texts
+train_file_text: []
+# train_file_text: [
+#     "hdfs://path/to/wikimatrix",
+# ]  # multilingual parallel texts
 texts_para: {source_key: "source_text",
          target_key: "target_text",
          tokenized: False,  # whether texts have been tokenized
@@ -93,12 +93,5 @@ use_one_cl_proj_only: False
 ckpt_frequent_step: 50000
 ckpt_frequent: 5  # epoch
 optimizer: {opt: adamW, lr: 1e-4, weight_decay: 0.01, lr_mult: 2}
-schedular: {sched: linear, lr: 1e-4, epochs: 30, num_warmup_steps: 2500}
+schedular: {sched: linear, lr: 1e-4, epochs: 1, num_warmup_steps: 2500}
 accelerator: {SYNCBN: false, FP16_OPT_LEVEL: O1, FP16_LOSS_SCALE: dynamic, RNG_SEED: 42, GRAD_ACCUMULATE_STEPS: 1, CLIP_GRAD_NORM: 1.0}
-
-
-
-
-
-
-

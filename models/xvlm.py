@@ -20,7 +20,7 @@ from models.swin_transformer import SwinTransformer, interpolate_relative_pos_em
 from models.xbert import BertConfig, BertForMaskedLM, BertModel
 
 from utils import read_json
-
+import time
 
 def load_params_change_prefix(state_dict: dict, prefix: str, new_prefix: str):
     if prefix == new_prefix:
@@ -104,6 +104,8 @@ def build_vision_encoder(config, load_params=False):
     Args:
         load_params: False when building fine-tuning models
     """
+    start = time.time()
+    print("Loading vision encoder models")
     num_patches = (config['image_res'] // config['patch_size']) ** 2
 
     if config['use_clip_vit']:  # good performance, but only base model available
@@ -197,13 +199,15 @@ def build_vision_encoder(config, load_params=False):
         msg = vision_encoder.load_state_dict(state_dict, strict=False)
         print("missing_keys: ", msg.missing_keys)
         print("unexpected_keys: ", msg.unexpected_keys)
-
+    end = time.time()
+    print("Finished loading vision encoder in : ", end - start)
     return vision_encoder, vision_width
 
 
 def build_text_encoder(config, vision_width, load_text_params=False, use_mlm_loss=False, config_text=None):
     init_params = []  # train from scratch with larger lr
-
+    print("Loading text encoder")
+    start = time.time()
     if config_text is None:
         config_text = BertConfig.from_json_file(os.path.join(config['text_encoder'], 'config.json'))
         # set configs
@@ -246,7 +250,8 @@ def build_text_encoder(config, vision_width, load_text_params=False, use_mlm_los
     else:  # for fine-tuning, not load_text_params by default
         assert load_text_params is False
         text_encoder = BertModel(config=config_text, add_pooling_layer=False)
-
+    end = time.time()
+    print("Finished text encoder : ", end - start)
     return text_encoder, init_params
 
 
